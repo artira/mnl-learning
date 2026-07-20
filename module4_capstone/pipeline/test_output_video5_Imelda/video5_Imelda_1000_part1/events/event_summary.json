@@ -1,0 +1,35 @@
+{
+  "video": "/Users/artiramanathan/Projects/mnl-learning/module4_capstone/video5_Imelda_1000_part1.mp4",
+  "duration_seconds": 320.4,
+  "sample_rate_hz": 4,
+  "event_counts": {
+    "levelups": 10,
+    "deaths": 0,
+    "results_screens": 0
+  },
+  "schedule_stats": {
+    "n_events": 10,
+    "total_time": 299.14,
+    "mean_interval": 32.98,
+    "std_interval": 10.95,
+    "cv_interval": 0.332,
+    "min_interval": 13.3,
+    "max_interval": 46.67,
+    "median_interval": 36.4,
+    "mean_decision_time": 2.52,
+    "intervals": [
+      18.2,
+      38.04,
+      40.83,
+      13.3,
+      36.4,
+      33.13,
+      44.57,
+      46.67,
+      25.66
+    ],
+    "schedule_classification": "FR (Fixed Ratio)",
+    "interval_trend": 1.35
+  },
+  "processing_time": 4626.9
+}

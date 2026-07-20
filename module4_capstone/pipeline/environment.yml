@@ -1,0 +1,14 @@
+name: vs-pipeline
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - matplotlib
+  - opencv
+  - pip
+  - pip:
+    - easyocr
+    - openpyxl
