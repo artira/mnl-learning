@@ -1,13 +1,21 @@
-# Vampire Survivors — Reward Dynamics Pipeline
+# Vampire Survivors — Reward Dynamics Extraction Pipeline
 
-**Media Neuroscience Lab, UCSB**
+**Media Neuroscience Lab, UC Santa Barbara**
+**Dr. René Weber, Principal Investigator**
 
-Computational pipeline for extracting reward event data from Vampire Survivors gameplay videos. Automates detection of level-ups, gem collection, deaths, and other game events for the lab's reward dynamics research.
+Computational pipeline for extracting reward event data from Vampire Survivors gameplay videos. Automates detection of level-ups, deaths, and results screens to support the lab's research on gaming reward dynamics and compulsive media use.
+
+## Overview
+
+This pipeline processes recorded Vampire Survivors gameplay sessions and extracts temporally precise event data that would otherwise require frame-by-frame human coding. The automated extraction enables scalable analysis across multiple gameplay sessions for reward trajectory construction and fMRI regressor generation.
 
 ## Quick Start
 
 ```bash
-# 1. Clone or download this folder
+# 1. Clone the repository
+git clone git@github.com:artira/mnl-learning.git
+cd mnl-learning/module4_capstone/pipeline
+
 # 2. Set up the environment (one-time)
 chmod +x setup.sh
 ./setup.sh
@@ -15,21 +23,9 @@ chmod +x setup.sh
 # 3. Activate environment
 conda activate vs-pipeline
 
-# 4. Run on your video
-python run_pipeline.py your_gameplay_video.mp4
+# 4. Process a video
+python run_pipeline.py /path/to/gameplay_video.mp4
 ```
-
-## What It Does
-
-The pipeline processes gameplay videos and extracts:
-
-| Feature | Method | Speed | Accuracy (Video3) |
-|---|---|---|---|
-| Level-Up events | OCR text detection | ~20 min/video | F1=0.89 (20/25 detected) |
-| Death events | OCR text detection | (same pass) | — |
-| Results screens | OCR text detection | (same pass) | — |
-| Blue/Green/Red gems | HSV color detection | ~2 min/video | Needs validation |
-| Gem collection events | Frame differencing | (same pass) | Needs validation |
 
 ## Usage
 
@@ -50,98 +46,97 @@ python run_pipeline.py /path/to/videos/*.mp4
 
 ### Options
 ```bash
-# Only detect events (faster — skips gem counting)
-python run_pipeline.py video.mp4 --events-only
-
-# Only count gems (faster — skips OCR)
-python run_pipeline.py video.mp4 --gems-only
-
-# Lower sample rate (faster but may miss short events)
-python run_pipeline.py video.mp4 --sample-rate 1
+# Change sample rate (default: 4 fps)
+python run_pipeline.py video.mp4 --sample-rate 2
 
 # Custom output directory
 python run_pipeline.py video.mp4 --output-dir /path/to/results
-
-# Save debug frames for gem color tuning
-python run_pipeline.py video.mp4 --debug
 ```
 
+## Detected Events
+
+| Event | Detection Method | Description |
+|---|---|---|
+| Level-Up | OCR ("Level Up!" text) | Player reaches a new level, upgrade menu appears |
+| Lucky Level-Up | OCR ("Lucky" + "Level Up!") | Bonus level-up with extra choices |
+| Death | OCR ("Game Over" / "Death") | Player character dies |
+| Results Screen | OCR ("Results" text) | End-of-session results display |
+
 ## Output Structure
+
+Each video produces its own output directory:
 
 ```
 pipeline_results/
   video_name/
     events/
-      all_features_ocr.csv         # Per-frame OCR results
-      detected_levelups.csv        # Grouped level-up events
+      all_features_ocr.csv         # Per-frame OCR detection results
+      detected_levelups.csv        # Grouped level-up events with timestamps
       detected_deaths.csv          # Death events
       detected_results.csv         # Results screen events
-      levelup_detection_ocr.png    # Detection visualization
-      event_summary.json           # Summary statistics
-    gems/
-      gem_counts_per_frame.csv     # Per-frame gem counts
-      gem_collection_events.csv    # Collection events
-      gem_analysis.png             # Gem visualization
-      gem_summary.json             # Summary statistics
-      debug_gems/                  # Debug frames (if --debug)
-  batch_summary.json               # Overall batch results
+      levelup_detection_ocr.png    # 4-panel detection visualization
+      event_summary.json           # Summary with event counts and schedule analysis
+  batch_summary.json               # Batch processing results (multi-video runs)
 ```
 
-## Pipeline Files
+## Algorithm
 
-| File | Algorithm | Purpose |
-|---|---|---|
-| `run_pipeline.py` | — | Main entry point, handles CLI and batching |
-| `levelup_detector_arti_ocr_v5.py` | EasyOCR (CRAFT + CRNN) | Detects level-ups, deaths, results via text |
-| `gem_counter_arti.py` | HSV color masking + contours | Counts blue, green, red gems |
-| `reward_aggregator.py` | Pandas merge + arithmetic | Combines outputs, computes XP metrics |
-| `xp_growth_metrics.py` | Wiki XP formulas | XP requirements and Growth calculations |
+The pipeline uses EasyOCR (CRAFT text detection + CRNN text recognition) to read on-screen text from sampled video frames.
+
+For each sampled frame:
+1. Crop the center region where event text appears (10-55% height, 25-80% width)
+2. Run OCR to detect and read all text in the region
+3. Match detected text against event patterns ("Level Up!", "Results", "Game Over")
+4. Handle split detections where OCR reads "Level" and "Up !" as separate results
+5. Group consecutive detection frames into discrete events with start/end timestamps
+6. Merge close events (within 2 seconds) to handle OCR frame-to-frame inconsistency
+
+Sample rate (default 4 fps) controls the tradeoff between speed and detection coverage. Level-up menus typically last 2-10 seconds, so 4 fps provides 8-40 frames per event.
 
 ## Validation
 
-Tested against human-coded data for Video3_MultiCharacter.mp4:
+Tested against human-coded ground truth for Video3_MultiCharacter.mp4 (9:31 duration, 25 human-coded level-ups):
 
 ```
-Level-Up Detection Confusion Matrix:
+Confusion Matrix:
                     Human: YES    Human: NO
 Pipeline: YES         20             0
 Pipeline: NO           5            90
 
-Precision: 100.0%  (zero false positives)
-Recall:    80.0%   (caught 20 of 25 level-ups)
-F1 Score:  0.89
-Accuracy:  95.7%
+Precision:  100.0%  (zero false positives)
+Recall:      80.0%  (detected 20 of 25 level-ups)
+F1 Score:    0.89
+Accuracy:   95.7%
 ```
 
-The 5 missed level-ups occur when the menu appears for under 1 second
-(below the 2fps sampling window) or visual effects obscure the text.
+The 5 missed level-ups occur when the menu appears for under 1 second (below the sampling window) or visual effects obscure the text on the specific sampled frames. All 20 detections are confirmed correct — the pipeline does not produce false alarms.
+
+## Pipeline Files
+
+| File | Purpose |
+|---|---|
+| `run_pipeline.py` | Main entry point — handles CLI arguments, video discovery, batch processing |
+| `levelup_detector_arti_ocr_v5.py` | Core detection engine — OCR extraction, event grouping, schedule analysis, visualization |
+| `environment.yml` | Conda environment specification |
+| `setup.sh` | One-command setup script |
 
 ## Requirements
 
 - Python 3.10
-- OpenCV
-- EasyOCR
+- OpenCV (video frame reading)
+- EasyOCR (text detection and recognition)
 - NumPy, Pandas, Matplotlib
-- ~500MB disk for EasyOCR models (downloaded on first run)
+- ~500MB disk for EasyOCR models (downloaded automatically on first run)
 
-All dependencies are installed via `setup.sh` or `environment.yml`.
+## Research Context
 
-## XP Formula Reference
+This pipeline supports the Media Neuroscience Lab's Gaming/Reward Dynamics project, which investigates how reward structures in video games relate to compulsive gameplay patterns. The extracted event timestamps serve as:
 
-From the Vampire Survivors wiki:
+- **Reward trajectory data**: Level-up timing patterns classified by Skinner's reinforcement schedules (Fixed Ratio vs Variable Ratio, assessed via coefficient of variation of inter-level-up intervals)
+- **fMRI regressors**: Precise event timestamps for modeling neural responses to reward events during in-scanner gameplay sessions
+- **Behavioral markers**: Decision time during level-up menus as a measure of player engagement and familiarity with upgrade options
 
-- Levels 1-20: XP requirement increases by +10 per level (5, 15, 25, ...)
-- Level 20→21: +600 XP spike
-- Levels 21-40: XP requirement increases by +13 per level
-- Level 40→41: +2400 XP spike
-- Levels 41+: XP requirement increases by +16 per level
+## Author
 
-Gem XP values (from lab spreadsheet):
-- Blue gem: 1.25 XP average
-- Green gem: 9 XP
-- Red gem: Needed_XP / 3 (scales with level)
-
-## Authors
-
-Arti Ramanathan — Pipeline development
-Media Neuroscience Lab — Dr. René Weber, UCSB
+Arti Ramanathan — M.A. Emerging Media Studies, Boston University (2025)
+External Collaborator, Media Neuroscience Lab, UCSB
